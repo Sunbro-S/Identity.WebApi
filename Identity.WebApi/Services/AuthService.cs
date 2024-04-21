@@ -51,7 +51,7 @@ namespace Identity.WebApi.Services
 
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config.GetSection("Jwt:Key").Value));
 
-            var signingCred = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha512Signature);
+            var signingCred = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256Signature);
 
             var securityToken = new JwtSecurityToken(
                 claims: claims,

@@ -1,6 +1,7 @@
 ﻿using Identity.WebApi.Module;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query.Internal;
 using System.Xml;
 
 namespace Identity.WebApi.Context
