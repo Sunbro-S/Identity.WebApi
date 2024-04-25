@@ -24,7 +24,19 @@ namespace Identity.WebApi.Migrations
 
             modelBuilder.Entity("Identity.WebApi.Module.Users", b =>
                 {
+                    b.Property<string>("CreatedRooms")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Mail")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OpenedRooms")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 

@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Identity.WebApi.Migrations
 {
     [DbContext(typeof(AuthDbContext))]
-    [Migration("20240420075735_Initial")]
+    [Migration("20240425150205_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -27,7 +27,19 @@ namespace Identity.WebApi.Migrations
 
             modelBuilder.Entity("Identity.WebApi.Module.Users", b =>
                 {
+                    b.Property<string>("CreatedRooms")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Mail")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OpenedRooms")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 

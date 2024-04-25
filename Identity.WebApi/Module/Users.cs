@@ -8,10 +8,10 @@ namespace Identity.WebApi.Module
     public class Users
     {
         public int UserId { get; set; }
-
-        public int year { get; set; }
-
         public string UserName { get; set; }
         public string Mail { get; set; }
+        public string OpenedRooms { get; set; }
+        public string CreatedRooms { get; set; }
+        public string Icon { get;set; }
     }
 }

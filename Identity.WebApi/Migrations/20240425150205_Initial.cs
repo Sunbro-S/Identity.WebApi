@@ -56,7 +56,10 @@ namespace Identity.WebApi.Migrations
                 {
                     UserId = table.Column<int>(type: "int", nullable: false),
                     UserName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Mail = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    Mail = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    OpenedRooms = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    CreatedRooms = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Icon = table.Column<string>(type: "nvarchar(max)", nullable: false)
                 },
                 constraints: table =>
                 {
