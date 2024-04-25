@@ -19,7 +19,7 @@ namespace Identity.WebApi.Controllers
         [HttpPost("Register")]
         public async Task<IActionResult> RegisterUser(LoginUser user)
         {
-            if (await _authService.RegisterUser(user))
+            if (await _authService.AddUserWithRoles(user))
             {
                 return Ok("Successfuly done");
             }

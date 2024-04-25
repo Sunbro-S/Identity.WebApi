@@ -8,6 +8,9 @@ namespace Identity.WebApi.Module
     public class Users
     {
         public int UserId { get; set; }
+
+        public int year { get; set; }
+
         public string UserName { get; set; }
         public string Mail { get; set; }
     }

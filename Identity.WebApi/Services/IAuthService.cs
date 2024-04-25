@@ -7,6 +7,6 @@ namespace Identity.WebApi.Services
     {
         string GenerateTokenString(LoginUser user);
         Task<bool> Login(LoginUser user);
-        Task<bool> RegisterUser(LoginUser user);
+        Task<bool> AddUserWithRoles(LoginUser userInfo);
     }
 }

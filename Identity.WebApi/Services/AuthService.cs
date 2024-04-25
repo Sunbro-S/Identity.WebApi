@@ -11,11 +11,34 @@ namespace Identity.WebApi.Services
     {
         private readonly UserManager<IdentityUser> _userManager;
         private readonly IConfiguration _config;
+        private readonly RoleManager<IdentityRole> _roleManager;
 
-        public AuthService(UserManager<IdentityUser> userManager, IConfiguration config)
+        public AuthService(UserManager<IdentityUser> userManager, IConfiguration config, RoleManager<IdentityRole> roleManager)
         {
             _userManager = userManager;
             _config = config;
+            _roleManager = roleManager;
+        }
+
+        public async Task<bool> AddUserWithRoles(LoginUser userInfo)
+        {
+            var user = new IdentityUser { UserName = userInfo.UserName, Email = userInfo.UserName };
+            var result = await _userManager.CreateAsync(user, userInfo.Password); //email is the password
+            if (!result.Succeeded)
+                throw new InvalidOperationException($"Tried to add user {user.UserName}, but failed.");
+
+            foreach (var roleName in userInfo.RolesCommaDelimited.Split(',').Select(x => x.Trim()))
+            {
+                var roleExist = await _roleManager.RoleExistsAsync(roleName);
+                if (!roleExist)
+                {
+                    //create the roles and seed them to the database: Question 1
+                    await _roleManager.CreateAsync(new IdentityRole(roleName));
+                }
+                await _userManager.AddToRoleAsync(user, roleName);
+            }
+
+            return result.Succeeded;
         }
 
         public async Task<bool> RegisterUser(LoginUser user)
