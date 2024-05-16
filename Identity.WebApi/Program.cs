@@ -1,5 +1,4 @@
 using Identity.WebApi.Context;
-using Identity.WebApi.Module;
 using Identity.WebApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -13,10 +12,10 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.      
 builder.Services.AddDbContext<AuthDbContext>(options =>
 {
-    options.UseNpgsql(builder.Configuration.GetSection("ConnectionStrings:DefaultConnection").Value);
+    options.UseSqlServer(builder.Configuration.GetSection("ConnectionStrings:DefaultConnection").Value);
 });
 
-builder.Services.AddIdentity<ExtendedIdentityUser, IdentityRole>(options =>
+builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
 {
     options.Password.RequiredLength = 5;
 }).AddEntityFrameworkStores<AuthDbContext>()
@@ -30,15 +29,18 @@ builder.Services.AddAuthentication(options =>
 {
     options.TokenValidationParameters = new TokenValidationParameters()
     {
-        ValidateActor = false,
-        ValidateIssuer = false,
-        ValidateAudience = false,
+        ValidateActor = true,
+        ValidateIssuer = true,
+        ValidateAudience = true,
         RequireExpirationTime = true,
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration.GetSection("Jwt:Key").Value)),
+        ValidIssuer = builder.Configuration.GetSection("Jwt:Issuer").Value,
+        ValidAudience = builder.Configuration.GetSection("Jwt:Audience").Value,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration.GetSection("Jwt:Key").Value))
 
     };
-});
+}
+);
 
 
 builder.Services.AddTransient<IAuthService, AuthService>();

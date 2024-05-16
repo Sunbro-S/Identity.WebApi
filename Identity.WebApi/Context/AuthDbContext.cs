@@ -1,5 +1,4 @@
 ﻿using Identity.WebApi.Module;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Query.Internal;
@@ -14,7 +13,5 @@ namespace Identity.WebApi.Context
 
         }
         public DbSet<Users> Users { get; set; }
-        public DbSet<ExtendedIdentityUser> ExtendedIdentityUser { get; set; }
-
     }
 }

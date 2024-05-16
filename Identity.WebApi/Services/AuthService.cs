@@ -3,18 +3,17 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
 
 namespace Identity.WebApi.Services
 {
     public class AuthService : IAuthService
     {
-        private readonly UserManager<ExtendedIdentityUser> _userManager;
+        private readonly UserManager<IdentityUser> _userManager;
         private readonly IConfiguration _config;
         private readonly RoleManager<IdentityRole> _roleManager;
 
-        public AuthService(UserManager<ExtendedIdentityUser> userManager, IConfiguration config, RoleManager<IdentityRole> roleManager)
+        public AuthService(UserManager<IdentityUser> userManager, IConfiguration config, RoleManager<IdentityRole> roleManager)
         {
             _userManager = userManager;
             _config = config;
@@ -23,8 +22,8 @@ namespace Identity.WebApi.Services
 
         public async Task<bool> AddUserWithRoles(LoginUser userInfo)
         {
-            var user = new ExtendedIdentityUser { UserName = userInfo.UserName, Email = userInfo.UserName };
-            var result = await _userManager.CreateAsync(user, userInfo.Password); 
+            var user = new IdentityUser { UserName = userInfo.UserName, Email = userInfo.UserName };
+            var result = await _userManager.CreateAsync(user, userInfo.Password); //email is the password
             if (!result.Succeeded)
                 throw new InvalidOperationException($"Tried to add user {user.UserName}, but failed.");
 
@@ -33,6 +32,7 @@ namespace Identity.WebApi.Services
                 var roleExist = await _roleManager.RoleExistsAsync(roleName);
                 if (!roleExist)
                 {
+                    //create the roles and seed them to the database: Question 1
                     await _roleManager.CreateAsync(new IdentityRole(roleName));
                 }
                 await _userManager.AddToRoleAsync(user, roleName);
@@ -41,94 +41,22 @@ namespace Identity.WebApi.Services
             return result.Succeeded;
         }
 
-        public async Task<LoginResponse> Login(LoginUser user)
+        public async Task<bool> Login(LoginUser user)
         {
-            var response = new LoginResponse();
             var identityUser = await _userManager.FindByEmailAsync(user.UserName);
-
-            if (identityUser is null || (await _userManager.CheckPasswordAsync(identityUser, user.Password)) == false)
+            if (identityUser is null)
             {
-                return response;
+                return false;
             }
 
-            response.IsLogedIn = true;
-            response.JwtToken = this.GenerateTokenString(identityUser.Email);
-            response.RefreshToken = this.GenerateRefreshTokenString();
-
-            identityUser.RefreshToken = response.RefreshToken;
-            identityUser.RefreshTokenExpiry = DateTime.UtcNow.AddHours(12);
-            await _userManager.UpdateAsync(identityUser);
-
-            return response;
+            return await _userManager.CheckPasswordAsync(identityUser, user.Password);
         }
 
-        public async Task<LoginResponse> RefreshToken(RefreshTokenModel model)
-        {
-            var principal = GetTokenPrincipal(model.JwtToken);
-
-            var response = new LoginResponse();
-            if (principal?.Identity?.Name is null)
-                return response;
-
-            var identityUser = await _userManager.FindByNameAsync(principal.Identity.Name);
-
-            if (identityUser is null || identityUser.RefreshToken != model.RefreshToken || identityUser.RefreshTokenExpiry < DateTime.UtcNow)
-                return response;
-
-            response.IsLogedIn = true;
-            response.JwtToken = this.GenerateTokenString(identityUser.Email);
-            response.RefreshToken = this.GenerateRefreshTokenString();
-
-            identityUser.RefreshToken = response.RefreshToken;
-            identityUser.RefreshTokenExpiry = DateTime.UtcNow.AddHours(12);
-            await _userManager.UpdateAsync(identityUser);
-
-            return response;
-        }
-
-        private ClaimsPrincipal? GetTokenPrincipal(string token)
-        {
-            try
-            {
-                var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config.GetSection("Jwt:Key").Value));
-                var validation = new TokenValidationParameters
-                {
-                    IssuerSigningKey = securityKey,
-                    ValidateLifetime = false,
-                    ValidateActor = false,
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
-                };
-
-                return new JwtSecurityTokenHandler().ValidateToken(token, validation, out _);
-            }
-            catch (Exception ex)
-            {
-                // Логируйте ошибку или обработайте ее как требуется
-                Console.WriteLine($"Ошибка при валидации токена: {ex.Message}");
-                return null; // Или выбросите исключение, если это необходимо
-            }
-        }
-
-        private string GenerateRefreshTokenString()
-        {
-            var randomNumber = new byte[64];
-
-            using (var numberGenerator = RandomNumberGenerator.Create())
-            {
-                numberGenerator.GetBytes(randomNumber);
-            }
-
-            return Convert.ToBase64String(randomNumber);
-        }
-
-
-        public string GenerateTokenString(string userName)
+        public string GenerateTokenString(LoginUser user)
         {
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.Email,userName),
-                new Claim(ClaimTypes.Name, userName),
+                new Claim(ClaimTypes.Email,user.UserName),
                 new Claim(ClaimTypes.Role,"Admin"),
             };
 
@@ -138,7 +66,7 @@ namespace Identity.WebApi.Services
 
             var securityToken = new JwtSecurityToken(
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(60),
+                expires: DateTime.Now.AddMinutes(60),
                 issuer: _config.GetSection("Jwt:Issuer").Value,
                 audience: _config.GetSection("Jwt:Audience").Value,
                 signingCredentials: signingCred);

@@ -5,8 +5,8 @@ namespace Identity.WebApi.Services
 {
     public interface IAuthService
     {
-        Task<LoginResponse> Login(LoginUser user);
-        Task<LoginResponse> RefreshToken(RefreshTokenModel model);
+        string GenerateTokenString(LoginUser user);
+        Task<bool> Login(LoginUser user);
         Task<bool> AddUserWithRoles(LoginUser userInfo);
     }
 }
