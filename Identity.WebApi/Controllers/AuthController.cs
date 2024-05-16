@@ -33,12 +33,23 @@ namespace Identity.WebApi.Controllers
             {
                 return BadRequest();
             }
-            if (await _authService.Login(user))
+            var loginResult = await _authService.Login(user);
+            if (loginResult.IsLogedIn)
             {
-                var tokenString = _authService.GenerateTokenString(user);
-                return Ok(tokenString);
+                return Ok(loginResult);
             }
-            return BadRequest();
+            return Unauthorized();
+        }
+
+        [HttpPost("RefreshToken")]
+        public async Task<IActionResult> RefreshToken(RefreshTokenModel model)
+        {
+            var loginResult = await _authService.RefreshToken(model);
+            if (loginResult.IsLogedIn)
+            {
+                return Ok(loginResult);
+            }
+            return Unauthorized();
         }
     }
 }
