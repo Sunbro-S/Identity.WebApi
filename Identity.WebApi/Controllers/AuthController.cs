@@ -17,7 +17,7 @@ namespace Identity.WebApi.Controllers
         }
 
         [HttpPost("Register")]
-        public async Task<IActionResult> RegisterUser(LoginUser user)
+        public async Task<IActionResult> RegisterUser(RegisterUser user)
         {
             if (await _authService.AddUserWithRoles(user))
             {
@@ -39,6 +39,15 @@ namespace Identity.WebApi.Controllers
                 return Ok(loginResult);
             }
             return Unauthorized();
+        }
+
+        [HttpPost("Logout")]
+        public async Task<IActionResult> Login()
+        {
+            
+          var loginResult = await _authService.Logout(Request);
+          return Ok(loginResult);
+            
         }
 
         [HttpPost("RefreshToken")]

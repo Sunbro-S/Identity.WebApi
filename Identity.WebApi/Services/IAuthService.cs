@@ -7,6 +7,7 @@ namespace Identity.WebApi.Services
     {
         Task<LoginResponse> Login(LoginUser user);
         Task<LoginResponse> RefreshToken(RefreshTokenModel model);
-        Task<bool> AddUserWithRoles(LoginUser userInfo);
+        Task<bool> AddUserWithRoles(RegisterUser userInfo);
+        Task<LoginResponse> Logout(HttpRequest request);
     }
 }
