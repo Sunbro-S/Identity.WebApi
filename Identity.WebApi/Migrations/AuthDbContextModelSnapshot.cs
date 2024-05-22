@@ -24,12 +24,13 @@ namespace Identity.WebApi.Migrations
 
             modelBuilder.Entity("Identity.WebApi.Module.Users", b =>
                 {
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
                     b.Property<string>("CreatedRooms")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("Icon")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("Mail")
@@ -37,15 +38,13 @@ namespace Identity.WebApi.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("OpenedRooms")
-                        .IsRequired()
                         .HasColumnType("text");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
 
                     b.Property<string>("UserName")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.HasKey("UserId");
 
                     b.ToTable("Users");
                 });

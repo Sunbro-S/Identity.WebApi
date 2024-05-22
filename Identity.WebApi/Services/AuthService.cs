@@ -1,6 +1,8 @@
-﻿using Identity.WebApi.Module;
+﻿using Identity.WebApi.Context;
+using Identity.WebApi.Module;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
+using System.Data;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -13,18 +15,19 @@ namespace Identity.WebApi.Services
         private readonly UserManager<ExtendedIdentityUser> _userManager;
         private readonly IConfiguration _config;
         private readonly RoleManager<IdentityRole> _roleManager;
-
-        public AuthService(UserManager<ExtendedIdentityUser> userManager, IConfiguration config, RoleManager<IdentityRole> roleManager)
+        private readonly AuthDbContext _context;
+        public AuthService(UserManager<ExtendedIdentityUser> userManager, IConfiguration config, RoleManager<IdentityRole> roleManager, AuthDbContext context)
         {
             _userManager = userManager;
             _config = config;
             _roleManager = roleManager;
+            _context = context;
         }
 
-        public async Task<bool> AddUserWithRoles(LoginUser userInfo)
+        public async Task<bool> AddUserWithRoles(RegisterUser userInfo)
         {
-            var user = new ExtendedIdentityUser { UserName = userInfo.UserName, Email = userInfo.UserName };
-            var result = await _userManager.CreateAsync(user, userInfo.Password); 
+            var user = new ExtendedIdentityUser { UserName = userInfo.UserName, Email = userInfo.Email };
+            var result = await _userManager.CreateAsync(user, userInfo.Password);
             if (!result.Succeeded)
                 throw new InvalidOperationException($"Tried to add user {user.UserName}, but failed.");
 
@@ -38,13 +41,28 @@ namespace Identity.WebApi.Services
                 await _userManager.AddToRoleAsync(user, roleName);
             }
 
+            var userinfo = new Users
+            {
+                UserId = user.Id,
+                UserName = user.UserName,
+                Mail = user.Email
+            };
+            _context.Users.Add(userinfo);
+            await _context.SaveChangesAsync();
             return result.Succeeded;
         }
 
         public async Task<LoginResponse> Login(LoginUser user)
         {
+            ExtendedIdentityUser? identityUser = null;
+
             var response = new LoginResponse();
-            var identityUser = await _userManager.FindByEmailAsync(user.UserName);
+            if ( user.Login!= null)
+            {
+                identityUser = await _userManager.FindByNameAsync(user.Login);
+                if (identityUser == null)
+                    identityUser = await _userManager.FindByEmailAsync(user.Login);
+            }
 
             if (identityUser is null || (await _userManager.CheckPasswordAsync(identityUser, user.Password)) == false)
             {
@@ -52,7 +70,7 @@ namespace Identity.WebApi.Services
             }
 
             response.IsLogedIn = true;
-            response.JwtToken = this.GenerateTokenString(identityUser.Email);
+            response.JwtToken = this.GenerateTokenString(identityUser);
             response.RefreshToken = this.GenerateRefreshTokenString();
 
             identityUser.RefreshToken = response.RefreshToken;
@@ -60,6 +78,69 @@ namespace Identity.WebApi.Services
             await _userManager.UpdateAsync(identityUser);
 
             return response;
+        }
+
+        public async Task<LoginResponse> Logout(HttpRequest request)
+        {
+            string authHeader = request.Headers["Authorization"].FirstOrDefault();
+            if (authHeader == null || !authHeader.StartsWith("Bearer "))
+            {
+                throw new InvalidOperationException("Invalid token.");
+            }
+
+            string accessToken = authHeader.Substring("Bearer ".Length).Trim();
+            var response = new LoginResponse();
+            var userEmail = GetClaimFromAccessToken(accessToken, ClaimTypes.Email);
+            var user = await _userManager.FindByEmailAsync(userEmail);
+
+
+            user.RefreshToken = null;
+            user.RefreshTokenExpiry = DateTime.UtcNow;
+            await _userManager.UpdateAsync(user);
+
+
+            response.IsLogedIn = false;
+            response.JwtToken = null;
+            response.RefreshToken = null;
+
+            return response;
+        }
+
+        private string GetClaimFromAccessToken(string accessToken, string claimType)
+        {
+            var claims = DecodeAccessToken(accessToken);
+            var claim = claims.FirstOrDefault(c => c.Type == claimType);
+            return claim?.Value;
+        }
+
+        private List<Claim> DecodeAccessToken(string accessToken)
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.UTF8.GetBytes(_config.GetSection("Jwt:Key").Value);
+
+            var tokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = _config.GetSection("Jwt:Issuer").Value,
+                ValidAudience = _config.GetSection("Jwt:Audience").Value,
+                IssuerSigningKey = new SymmetricSecurityKey(key)
+            };
+
+            try
+            {
+                // Валидация токена и извлечение утверждений
+                var principal = tokenHandler.ValidateToken(accessToken, tokenValidationParameters, out SecurityToken validatedToken);
+                return principal.Claims.ToList();
+            }
+            catch (Exception ex)
+            {
+                // Логируйте или обрабатывайте ошибку, если необходимо
+                Console.WriteLine($"Ошибка при расшифровке токена: {ex.Message}");
+                return null;
+            }
         }
 
         public async Task<LoginResponse> RefreshToken(RefreshTokenModel model)
@@ -76,7 +157,7 @@ namespace Identity.WebApi.Services
                 return response;
 
             response.IsLogedIn = true;
-            response.JwtToken = this.GenerateTokenString(identityUser.Email);
+            response.JwtToken = this.GenerateTokenString(identityUser);
             response.RefreshToken = this.GenerateRefreshTokenString();
 
             identityUser.RefreshToken = response.RefreshToken;
@@ -123,18 +204,19 @@ namespace Identity.WebApi.Services
         }
 
 
-        public string GenerateTokenString(string userName)
+        public string GenerateTokenString(ExtendedIdentityUser user)
         {
+            var role = _userManager.GetRolesAsync(user).Result.First();
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.Email,userName),
-                new Claim(ClaimTypes.Name, userName),
-                new Claim(ClaimTypes.Role,"Admin"),
+                new Claim(ClaimTypes.Email,user.Email),
+                new Claim(ClaimTypes.Name, user.UserName),
+                new Claim(ClaimTypes.Role, role),
             };
 
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config.GetSection("Jwt:Key").Value));
 
-            var signingCred = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256Signature);
+            var signingCred = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
             var securityToken = new JwtSecurityToken(
                 claims: claims,
