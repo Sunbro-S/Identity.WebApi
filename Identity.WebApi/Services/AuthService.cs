@@ -1,6 +1,9 @@
-﻿using Identity.WebApi.Context;
+﻿using Azure.Core;
+using Identity.WebApi.Context;
 using Identity.WebApi.Module;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using System.Data;
 using System.IdentityModel.Tokens.Jwt;
@@ -40,13 +43,24 @@ namespace Identity.WebApi.Services
                 }
                 await _userManager.AddToRoleAsync(user, roleName);
             }
-
+            var fullname = userInfo.FullName.Split(" ");
             var userinfo = new Users
             {
                 UserId = user.Id,
                 UserName = user.UserName,
-                Mail = user.Email
+                Mail = user.Email,
+                Name = fullname[1],
+                Lastname = fullname[0],
+                Otchestvo = fullname[2]
             };
+
+            var newFriendList = new FriendLists
+            {
+                Id = user.Id,
+                FriendList = new List< string> { }
+            };
+
+            _context.FriendLists.Add(newFriendList);
             _context.Users.Add(userinfo);
             await _context.SaveChangesAsync();
             return result.Succeeded;
@@ -131,13 +145,11 @@ namespace Identity.WebApi.Services
 
             try
             {
-                // Валидация токена и извлечение утверждений
                 var principal = tokenHandler.ValidateToken(accessToken, tokenValidationParameters, out SecurityToken validatedToken);
                 return principal.Claims.ToList();
             }
             catch (Exception ex)
             {
-                // Логируйте или обрабатывайте ошибку, если необходимо
                 Console.WriteLine($"Ошибка при расшифровке токена: {ex.Message}");
                 return null;
             }
@@ -167,28 +179,155 @@ namespace Identity.WebApi.Services
             return response;
         }
 
+        public async Task<UsersSerchResult> GetUserByLogin(string friendName)
+        {
+            var user = await _userManager.FindByNameAsync(friendName);
+
+            if (user == null)
+            {
+               throw new InvalidOperationException ("User not found");
+            }
+
+            var userInfo = await _context.Users.FindAsync(user.Id);
+            var result = new UsersSerchResult() 
+            {
+                Username = user.UserName,
+                Fullname = $"{userInfo.Lastname} {userInfo.Name} {userInfo.Otchestvo}"
+            };
+            return result;
+        }
+       
+        public async Task<List<string>> GetFriendList(HttpRequest request)
+        {
+            string authHeader = request.Headers["Authorization"].FirstOrDefault();
+            if (authHeader == null || !authHeader.StartsWith("Bearer "))
+            {
+                throw new InvalidOperationException("Invalid token.");
+            }
+
+            string accessToken = authHeader.Substring("Bearer ".Length).Trim();
+            var response = new LoginResponse();
+            var userEmail = GetClaimFromAccessToken(accessToken, ClaimTypes.Email);
+            var user = await _userManager.FindByEmailAsync(userEmail);
+            var friendList = await _context.FriendLists.FindAsync(user.Id);
+            return friendList.FriendList;
+
+        }
+
+        public async Task<LoginResponse> DeleteAccount(HttpRequest request)
+        {
+            string authHeader = request.Headers["Authorization"].FirstOrDefault();
+            if (authHeader == null || !authHeader.StartsWith("Bearer "))
+            {
+                throw new InvalidOperationException("Invalid token.");
+            }
+
+            string accessToken = authHeader.Substring("Bearer ".Length).Trim();
+            var userEmail = GetClaimFromAccessToken(accessToken, ClaimTypes.Email);
+            var user = await _userManager.FindByEmailAsync(userEmail);
+            var response = new LoginResponse();
+            var result = await _userManager.DeleteAsync(user);
+            if (!result.Succeeded)
+            {
+                throw new InvalidOperationException("Error deleting user.");
+            }
+
+            var userInfo = await _context.Users.FindAsync(user.Id);
+            if (userInfo != null)
+            {
+                _context.Users.Remove(userInfo);
+            }
+
+            var friendList = await _context.FriendLists.FindAsync(user.Id);
+            if (friendList != null)
+            {
+                _context.FriendLists.Remove(friendList);
+            }
+
+            await _context.SaveChangesAsync();
+
+            response.IsLogedIn = false;
+            response.JwtToken = null;
+            response.RefreshToken = null;
+            return response;
+        }
+
+        public async Task<LoginResponse> PutAccountChanges(HttpRequest request, UpdateUserModel updateUserModel)
+        {
+            string authHeader = request.Headers["Authorization"].FirstOrDefault();
+            if (authHeader == null || !authHeader.StartsWith("Bearer "))
+            {
+                throw new InvalidOperationException("Invalid token.");
+            }
+
+            string accessToken = authHeader.Substring("Bearer ".Length).Trim();
+
+            var userEmail = GetClaimFromAccessToken(accessToken, ClaimTypes.Email);
+
+            var user = await _userManager.FindByEmailAsync(userEmail);
+            var userInfo = await _context.Users.FindAsync(user.Id);
+            if (user == null)
+            {
+                throw new InvalidOperationException("User not found.");
+            }
+
+            if (!string.IsNullOrEmpty(updateUserModel.UserName))
+            {
+                user.UserName = updateUserModel.UserName;
+            }
+            if (!string.IsNullOrEmpty(updateUserModel.Email))
+            {
+                user.Email = updateUserModel.Email;
+            }
+            if (!string.IsNullOrEmpty(updateUserModel.Password))
+            {
+                user.PasswordHash = _userManager.PasswordHasher.HashPassword(user, updateUserModel.Password);
+            }
+            if (!string.IsNullOrEmpty(updateUserModel.FullName))
+            {
+                var fullName = updateUserModel.FullName;
+                userInfo.Name = fullName.Split(" ")[1];
+                userInfo.Lastname = fullName.Split(" ")[0];
+                userInfo.Otchestvo = fullName.Split(" ")[3];
+            }
+            var response = new LoginResponse();
+            response.IsLogedIn = true;
+            response.JwtToken = this.GenerateTokenString(user);
+            response.RefreshToken = this.GenerateRefreshTokenString();
+
+            user.RefreshToken = response.RefreshToken;
+            user.RefreshTokenExpiry = DateTime.UtcNow.AddHours(12);
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                throw new InvalidOperationException("Error updating user.");
+            }
+            if (userInfo != null)
+            {
+                userInfo.UserName = user.UserName;
+                userInfo.Mail = user.Email;
+
+                _context.Users.Update(userInfo);
+                await _context.SaveChangesAsync();
+            }
+
+            return response;
+        }
+
         private ClaimsPrincipal? GetTokenPrincipal(string token)
         {
-            try
+            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config.GetSection("Jwt:Key").Value));
+            var validation = new TokenValidationParameters
             {
-                var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config.GetSection("Jwt:Key").Value));
-                var validation = new TokenValidationParameters
-                {
-                    IssuerSigningKey = securityKey,
-                    ValidateLifetime = false,
-                    ValidateActor = false,
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
-                };
+                IssuerSigningKey = securityKey,
+                ValidateLifetime = false,
+                ValidateActor = false,
+                ValidateIssuer = false,
+                ValidateAudience = false,
+            };
 
-                return new JwtSecurityTokenHandler().ValidateToken(token, validation, out _);
-            }
-            catch (Exception ex)
-            {
-                // Логируйте ошибку или обработайте ее как требуется
-                Console.WriteLine($"Ошибка при валидации токена: {ex.Message}");
-                return null; // Или выбросите исключение, если это необходимо
-            }
+            return new JwtSecurityTokenHandler().ValidateToken(token, validation, out _);
+
         }
 
         private string GenerateRefreshTokenString()

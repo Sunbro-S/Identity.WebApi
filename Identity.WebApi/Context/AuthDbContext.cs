@@ -14,6 +14,7 @@ namespace Identity.WebApi.Context
 
         }
         public DbSet<Users> Users { get; set; }
+        public DbSet<FriendLists> FriendLists { get; set; }
         public DbSet<ExtendedIdentityUser> ExtendedIdentityUser { get; set; }
 
     }
