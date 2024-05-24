@@ -1,0 +1,19 @@
+version: '3.4'
+
+services:
+  identity.webapi:
+    image: ${DOCKER_REGISTRY-}identitywebapi
+    build:
+      context: .
+      dockerfile: Identity.WebApi/Dockerfile
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=UserTest;Username=postgres;Password=qe13zc24680
+  db:
+      image: postgres:latest
+      environment:
+        POSTGRES_DB: UserTest
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: qe13zc24680
+      ports:
+        - "5432:5432"
+
