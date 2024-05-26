@@ -1,13 +1,19 @@
-version: '3.4'
+version: '3.9'
 
 services:
   identity.webapi:
-    image: ${DOCKER_REGISTRY-}identitywebapi
-    build:
-      context: .
-      dockerfile: Identity.WebApi/Dockerfile
+    image: sunbros/identitywebapi
     environment:
       - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=UserTest;Username=postgres;Password=qe13zc24680
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - ASPNETCORE_HTTPS_PORTS=8081
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    volumes:
+      - ${APPDATA}/Microsoft/UserSecrets:/home/app/.microsoft/usersecrets:ro
+      - ${APPDATA}/ASP.NET/Https:/home/app/.aspnet/https:ro
   db:
       image: postgres:latest
       environment:
